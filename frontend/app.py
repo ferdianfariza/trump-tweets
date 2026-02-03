@@ -3,9 +3,11 @@ Streamlit frontend for Trump Tweet Search Engine
 """
 
 import streamlit as st
+import streamlit.components.v1 as components
 import requests
-import pandas as pd
-from typing import List, Dict
+import json
+import os
+from typing import Dict
 
 # Configuration
 API_URL = "http://localhost:8000"
@@ -14,38 +16,39 @@ API_URL = "http://localhost:8000"
 st.set_page_config(
     page_title="Trump Tweet Search",
     page_icon="🔍",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
+
+# Force light theme
+st.markdown("""
+    <style>
+    /* Force light theme colors */
+    .stApp {
+        background-color: white;
+        color: black;
+    }
+    [data-testid="stSidebar"] {
+        background-color: #f0f2f6;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
 # Custom CSS
 st.markdown("""
     <style>
     .main-header {
-        font-size: 3rem;
+        font-size: 1.8rem;
         font-weight: bold;
         text-align: center;
-        color: #1f77b4;
-        margin-bottom: 1rem;
+        color: #000;
+        margin-bottom: 0.3rem;
     }
     .sub-header {
-        font-size: 1.2rem;
+        font-size: 0.9rem;
         text-align: center;
         color: #666;
-        margin-bottom: 2rem;
-    }
-    .tweet-card {
-        background-color: #000000;
-        padding: 1rem;
-        border-radius: 10px;
-        margin-bottom: 1rem;
-        border-left: 4px solid #1f77b4;
-    }
-    .score-badge {
-        background-color: #1f77b4;
-        color: white;
-        padding: 0.2rem 0.5rem;
-        border-radius: 5px;
-        font-weight: bold;
+        margin-bottom: 0.5rem;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -89,7 +92,7 @@ def search_tweets(query: str, top_k: int = 10) -> Dict:
 
 
 # Main UI
-st.markdown('<div class="main-header">🔍 Trump Tweet Search Engine</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">Trump Tweet Search Engine</div>', unsafe_allow_html=True)
 st.markdown(
     '<div class="sub-header">Information Retrieval System using TF-IDF & Cosine Similarity</div>',
     unsafe_allow_html=True
@@ -97,13 +100,13 @@ st.markdown(
 
 # Check API status
 if not check_api_health():
-    st.error("⚠️ Backend API is not running! Please start the FastAPI server.")
+    st.error("WARNING: Backend API is not running! Please start the FastAPI server.")
     st.code("cd backend && uvicorn app.main:app --reload", language="bash")
     st.stop()
 
 # Sidebar with stats
 with st.sidebar:
-    st.header("📊 System Statistics")
+    st.header("System Statistics")
     
     stats = get_stats()
     if stats:
@@ -111,7 +114,7 @@ with st.sidebar:
         st.metric("Vocabulary Size", f"{stats['vocabulary_size']:,}")
         st.metric("Max Features", stats['max_features'])
         
-        with st.expander("ℹ️ About"):
+        with st.expander("About"):
             st.markdown("""
             This system uses:
             - **TF-IDF** for document representation
@@ -125,11 +128,11 @@ with st.sidebar:
     st.divider()
     
     # Settings
-    st.header("⚙️ Settings")
+    st.header("Settings")
     top_k = st.slider("Number of results", min_value=1, max_value=50, value=10)
 
 # Main search interface
-st.header("🔎 Search Tweets")
+st.header("Search Tweets")
 
 # Search input
 col1, col2 = st.columns([4, 1])
@@ -140,7 +143,7 @@ with col1:
         label_visibility="collapsed"
     )
 with col2:
-    search_button = st.button("🔍 Search", type="primary", use_container_width=True)
+    search_button = st.button("Search", type="primary", use_container_width=True)
 
 # Perform search
 if search_button or (query and len(query) > 0):
@@ -153,41 +156,25 @@ if search_button or (query and len(query) > 0):
         if results and results.get('results'):
             st.success(f"Found {results['total_results']} relevant tweets")
             
-            # Display results
+            # Display visualization
             st.divider()
             
-            for result in results['results']:
-                with st.container():
-                    col1, col2 = st.columns([1, 20])
-                    
-                    with col1:
-                        st.markdown(
-                            f'<div style="font-size: 2rem; font-weight: bold; color: #1f77b4;">#{result["rank"]}</div>',
-                            unsafe_allow_html=True
-                        )
-                    
-                    with col2:
-                        st.markdown(
-                            f'<span class="score-badge">Score: {result["score"]:.3f}</span>',
-                            unsafe_allow_html=True
-                        )
-                        st.markdown(f'<div class="tweet-card">{result["tweet"]}</div>', unsafe_allow_html=True)
-                        
-                        # Show cleaned tweet in expander
-                        if result.get("cleaned_tweet"):
-                            with st.expander("🔬 View preprocessed text"):
-                                st.text(result["cleaned_tweet"])
+            # Read the HTML file
+            html_path = os.path.join(os.path.dirname(__file__), "search_animation.html")
+            with open(html_path, 'r') as f:
+                html_content = f.read()
             
-            # Download results as CSV
-            st.divider()
-            df_results = pd.DataFrame(results['results'])
-            csv = df_results.to_csv(index=False)
-            st.download_button(
-                label="📥 Download results as CSV",
-                data=csv,
-                file_name=f"search_results_{query.replace(' ', '_')}.csv",
-                mime="text/csv"
+            # Inject the data into the HTML
+            results_json = json.dumps(results['results'])
+            query_json = json.dumps(query)
+            
+            html_with_data = html_content.replace(
+                "// Auto-run demo if no data provided",
+                f"updateGraph({query_json}, {results_json});"
             )
+            
+            # Display the visualization
+            components.html(html_with_data, height=800, scrolling=False)
             
         elif results and results['total_results'] == 0:
             st.info("No matching tweets found. Try different keywords.")

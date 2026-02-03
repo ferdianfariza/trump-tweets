@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Search Animation</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        background: white;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        overflow: hidden;
+      }
+      #container {
+        display: flex;
+        width: 100%;
+        height: 800px;
+      }
+      #graph {
+        flex: 1;
+        min-width: 600px;
+      }
+      #tweet-panel {
+        width: 400px;
+        background: #fafafa;
+        border-left: 2px solid #000;
+        overflow-y: auto;
+        padding: 20px;
+      }
+      #tweet-panel h3 {
+        font-size: 18px;
+        margin-bottom: 15px;
+        color: #000;
+      }
+      .tweet-item {
+        background: white;
+        border: 1px solid #ddd;
+        padding: 12px;
+        margin-bottom: 12px;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .tweet-item:hover {
+        border-color: #000;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+      .tweet-item.selected {
+        border: 2px solid #000;
+        background: #f5f5f5;
+      }
+      .tweet-rank {
+        font-size: 24px;
+        font-weight: bold;
+        color: #000;
+        margin-bottom: 8px;
+      }
+      .tweet-score {
+        font-size: 12px;
+        color: #666;
+        margin-bottom: 8px;
+      }
+      .tweet-text {
+        font-size: 14px;
+        line-height: 1.4;
+        color: #333;
+      }
+      .node {
+        stroke-width: 2px;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .node:hover {
+        stroke-width: 3px;
+      }
+      .node.selected {
+        stroke-width: 4px;
+        stroke: #ff0000 !important;
+      }
+      .link {
+        stroke: #000;
+        stroke-opacity: 0;
+        stroke-width: 1px;
+        fill: none;
+      }
+      .node-label {
+        font-size: 12px;
+        font-weight: bold;
+        text-anchor: middle;
+        pointer-events: none;
+        fill: white;
+      }
+      .rank-label {
+        font-size: 14px;
+        font-weight: bold;
+        text-anchor: middle;
+        pointer-events: none;
+      }
+      .empty-state {
+        text-align: center;
+        color: #999;
+        padding: 40px 20px;
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="container">
+      <div id="graph"></div>
+      <div id="tweet-panel">
+        <h3>Top Results</h3>
+        <div id="tweet-list" class="empty-state">
+          Click on nodes to view tweet details
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Configuration
+      const width = 1000;
+      const height = 800;
+      const queryNodeRadius = 30;
+      const tweetNodeRadius = 12;
+
+      // Animation timing
+      const INIT_DURATION = 500;
+      const SEARCH_DURATION = 2500;
+      const RANKING_DURATION = 1000;
+      const RESULTS_DURATION = 500;
+
+      // Create SVG
+      const svg = d3
+        .select("#graph")
+        .append("svg")
+        .attr("width", "100%")
+        .attr("height", "100%")
+        .attr("viewBox", [0, 0, width, height]);
+
+      // Data storage
+      let graphData = {
+        query: "",
+        results: [],
+      };
+      let selectedNodeId = null;
+
+      // Function to receive data from Streamlit
+      window.updateGraph = function (query, results) {
+        graphData.query = query;
+        graphData.results = results;
+        selectedNodeId = null;
+        animateSearch();
+        updateTweetPanel();
+      };
+
+      // Update tweet panel
+      function updateTweetPanel() {
+        const tweetList = d3.select("#tweet-list");
+
+        if (graphData.results.length === 0) {
+          tweetList.html(
+            '<div class="empty-state">No results to display</div>',
+          );
+          return;
+        }
+
+        tweetList.html("");
+
+        graphData.results.slice(0, 10).forEach((result, i) => {
+          const tweetItem = tweetList
+            .append("div")
+            .attr("class", "tweet-item")
+            .attr("data-id", `tweet-${i}`)
+            .on("click", function () {
+              selectNode(`tweet-${i}`);
+            });
+
+          tweetItem
+            .append("div")
+            .attr("class", "tweet-rank")
+            .text(`#${result.rank}`);
+
+          tweetItem
+            .append("div")
+            .attr("class", "tweet-score")
+            .text(`Relevance Score: ${result.score.toFixed(3)}`);
+
+          tweetItem
+            .append("div")
+            .attr("class", "tweet-text")
+            .text(result.tweet);
+        });
+      }
+
+      // Select node function
+      function selectNode(nodeId) {
+        selectedNodeId = nodeId;
+
+        // Update graph nodes
+        svg.selectAll(".node").classed("selected", (d) => d.id === nodeId);
+
+        // Update tweet panel
+        d3.selectAll(".tweet-item").classed("selected", function () {
+          return d3.select(this).attr("data-id") === nodeId;
+        });
+
+        // Scroll to selected tweet
+        const selectedTweet = document.querySelector(
+          `.tweet-item[data-id="${nodeId}"]`,
+        );
+        if (selectedTweet) {
+          selectedTweet.scrollIntoView({
+            behavior: "smooth",
+            block: "nearest",
+          });
+        }
+      }
+
+      // Function to create node data
+      function createNodeData(query, results) {
+        const nodes = [];
+        const links = [];
+
+        // Query node at center
+        nodes.push({
+          id: "query",
+          label: query,
+          type: "query",
+          x: width / 2,
+          y: height / 2,
+          fx: width / 2,
+          fy: height / 2,
+        });
+
+        // Tweet nodes positioned in a circle
+        const numNodes = Math.min(results.length, 50);
+        const radius = 220;
+
+        results.slice(0, numNodes).forEach((result, i) => {
+          const angle = (i / numNodes) * 2 * Math.PI;
+          const x = width / 2 + radius * Math.cos(angle);
+          const y = height / 2 + radius * Math.sin(angle);
+
+          nodes.push({
+            id: `tweet-${i}`,
+            label: `T${i + 1}`,
+            type: "tweet",
+            score: result.score,
+            rank: result.rank,
+            tweet: result.tweet,
+            x: x,
+            y: y,
+          });
+
+          links.push({
+            source: "query",
+            target: `tweet-${i}`,
+            score: result.score,
+          });
+        });
+
+        return { nodes, links };
+      }
+
+      // Animation function
+      async function animateSearch() {
+        svg.selectAll("*").remove();
+
+        const { nodes, links } = createNodeData(
+          graphData.query,
+          graphData.results,
+        );
+
+        const linkGroup = svg.append("g").attr("class", "links");
+        const nodeGroup = svg.append("g").attr("class", "nodes");
+
+        await stage1_initialization(nodeGroup, nodes);
+        await stage2_searchProcess(linkGroup, nodeGroup, nodes, links);
+        await stage3_ranking(nodeGroup, nodes);
+        await stage4_results(nodeGroup, nodes);
+      }
+
+      // Stage 1: Initialization
+      function stage1_initialization(nodeGroup, nodes) {
+        return new Promise((resolve) => {
+          const node = nodeGroup
+            .selectAll("g")
+            .data(nodes)
+            .join("g")
+            .attr("class", "node-group")
+            .attr("transform", (d) => `translate(${d.x},${d.y})`);
+
+          node
+            .append("circle")
+            .attr("class", "node")
+            .attr("r", (d) =>
+              d.type === "query" ? queryNodeRadius : tweetNodeRadius,
+            )
+            .attr("fill", (d) => (d.type === "query" ? "#000" : "#fff"))
+            .attr("stroke", "#000")
+            .style("opacity", 0)
+            .on("click", function (event, d) {
+              if (d.type === "tweet") {
+                selectNode(d.id);
+              }
+            });
+
+          node
+            .filter((d) => d.type === "query")
+            .append("text")
+            .attr("class", "node-label")
+            .attr("dy", "0.35em")
+            .text((d) =>
+              d.label.length > 15 ? d.label.substring(0, 15) + "..." : d.label,
+            )
+            .style("opacity", 0);
+
+          node
+            .selectAll("circle")
+            .transition()
+            .duration(INIT_DURATION)
+            .style("opacity", 1);
+
+          node
+            .selectAll("text")
+            .transition()
+            .duration(INIT_DURATION)
+            .style("opacity", 1);
+
+          setTimeout(resolve, INIT_DURATION);
+        });
+      }
+
+      // Stage 2: Search Process
+      function stage2_searchProcess(linkGroup, nodeGroup, nodes, links) {
+        return new Promise((resolve) => {
+          const link = linkGroup
+            .selectAll("line")
+            .data(links)
+            .join("line")
+            .attr("class", "link")
+            .attr("x1", width / 2)
+            .attr("y1", height / 2)
+            .attr("x2", (d) => {
+              const target = nodes.find((n) => n.id === d.target);
+              return target.x;
+            })
+            .attr("y2", (d) => {
+              const target = nodes.find((n) => n.id === d.target);
+              return target.y;
+            });
+
+          const delayPerLink = SEARCH_DURATION / links.length;
+
+          link
+            .transition()
+            .delay((d, i) => i * delayPerLink)
+            .duration(delayPerLink)
+            .attr("stroke-opacity", 0.3);
+
+          setTimeout(resolve, SEARCH_DURATION);
+        });
+      }
+
+      // Stage 3: Ranking
+      function stage3_ranking(nodeGroup, nodes) {
+        return new Promise((resolve) => {
+          nodeGroup
+            .selectAll(".node-group")
+            .filter((d) => d.type === "tweet")
+            .select("circle")
+            .transition()
+            .duration(RANKING_DURATION)
+            .attr("fill", (d) => {
+              if (d.score > 0.7) return "#000";
+              if (d.score > 0.4) return "#888";
+              return "#fff";
+            })
+            .attr("r", (d) => {
+              if (d.score > 0.7) return tweetNodeRadius * 1.5;
+              if (d.score > 0.4) return tweetNodeRadius * 1.2;
+              return tweetNodeRadius;
+            })
+            .style("opacity", (d) => (d.score < 0.4 ? 0.3 : 1));
+
+          setTimeout(resolve, RANKING_DURATION);
+        });
+      }
+
+      // Stage 4: Results
+      function stage4_results(nodeGroup, nodes) {
+        return new Promise((resolve) => {
+          const topResults = nodes.filter(
+            (d) => d.type === "tweet" && d.rank <= 10,
+          );
+
+          nodeGroup
+            .selectAll(".node-group")
+            .filter((d) => topResults.includes(d))
+            .append("text")
+            .attr("class", "rank-label")
+            .attr("dy", "0.35em")
+            .text((d) => d.rank)
+            .attr("fill", (d) => (d.score > 0.5 ? "#fff" : "#000"))
+            .style("opacity", 0)
+            .transition()
+            .duration(RESULTS_DURATION)
+            .style("opacity", 1);
+
+          setTimeout(resolve, RESULTS_DURATION);
+        });
+      }
+
+      // Demo data for testing
+      const demoResults = Array.from({ length: 30 }, (_, i) => ({
+        rank: i + 1,
+        score: Math.max(0.1, 1 - i * 0.03),
+        tweet: `This is a sample tweet number ${i + 1} about the search query with some additional text to make it look more realistic.`,
+      }));
+
+      // Auto-run demo if no data provided
+      setTimeout(() => {
+        if (graphData.results.length === 0) {
+          updateGraph("immigration policy", demoResults);
+        }
+      }, 500);
+    </script>
+  </body>
+</html>
