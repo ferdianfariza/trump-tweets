@@ -102,7 +102,7 @@ def search_tweets(query: str, top_k: int = 10) -> Dict:
 
 
 # Main UI
-st.markdown('<div class="main-header">🔍 Trump Tweet Search Engine</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">Trump Tweet Search Engine</div>', unsafe_allow_html=True)
 st.markdown(
     '<div class="sub-header">Information Retrieval System using TF-IDF & Cosine Similarity</div>',
     unsafe_allow_html=True
@@ -110,13 +110,13 @@ st.markdown(
 
 # Check API status
 if not check_api_health():
-    st.error("⚠️ Backend API is not running! Please start the FastAPI server.")
+    st.error("WARNING: Backend API is not running! Please start the FastAPI server.")
     st.code("cd backend && uvicorn app.main:app --reload", language="bash")
     st.stop()
 
 # Sidebar with stats
 with st.sidebar:
-    st.header("📊 System Statistics")
+    st.header("System Statistics")
     
     stats = get_stats()
     if stats:
@@ -124,7 +124,7 @@ with st.sidebar:
         st.metric("Vocabulary Size", f"{stats['vocabulary_size']:,}")
         st.metric("Max Features", stats['max_features'])
         
-        with st.expander("ℹ️ About"):
+        with st.expander("About"):
             st.markdown("""
             This system uses:
             - **TF-IDF** for document representation
@@ -138,11 +138,11 @@ with st.sidebar:
     st.divider()
     
     # Settings
-    st.header("⚙️ Settings")
+    st.header("Settings")
     top_k = st.slider("Number of results", min_value=1, max_value=50, value=10)
 
 # Main search interface
-st.header("🔎 Search Tweets")
+st.header("Search Tweets")
 
 # Search input
 col1, col2 = st.columns([4, 1])
@@ -153,7 +153,7 @@ with col1:
         label_visibility="collapsed"
     )
 with col2:
-    search_button = st.button("🔍 Search", type="primary", use_container_width=True)
+    search_button = st.button("Search", type="primary", use_container_width=True)
 
 # Perform search
 if search_button or (query and len(query) > 0):
@@ -187,7 +187,7 @@ if search_button or (query and len(query) > 0):
                     
                     # Show cleaned tweet in expander
                     if result.get("cleaned_tweet"):
-                        with st.expander("🔬 View preprocessed text"):
+                        with st.expander("View preprocessed text"):
                             st.code(result["cleaned_tweet"], language="text")
             
             # Download results as CSV
@@ -195,7 +195,7 @@ if search_button or (query and len(query) > 0):
             df_results = pd.DataFrame(results['results'])
             csv = df_results.to_csv(index=False)
             st.download_button(
-                label="📥 Download results as CSV",
+                label="Download results as CSV",
                 data=csv,
                 file_name=f"search_results_{query.replace(' ', '_')}.csv",
                 mime="text/csv"

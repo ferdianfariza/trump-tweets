@@ -44,8 +44,8 @@ class TweetSearchEngine:
         self.cleaned_docs = cleaned_docs
         self.tfidf_matrix = self.vectorizer.fit_transform(cleaned_docs)
         
-        print(f"✓ TF-IDF matrix shape: {self.tfidf_matrix.shape}")
-        print(f"✓ Vocabulary size: {len(self.vectorizer.get_feature_names_out())}")
+        print(f"TF-IDF matrix shape: {self.tfidf_matrix.shape}")
+        print(f"Vocabulary size: {len(self.vectorizer.get_feature_names_out())}")
         
     def search(self, query: str, top_k: int = 5) -> List[Dict]:
         """

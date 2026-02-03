@@ -28,7 +28,7 @@ app = FastAPI(
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify your Streamlit URL
+    allow_origins=["*"],  # production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -46,42 +46,42 @@ async def startup_event():
     """
     global search_engine, documents
     
-    print("🚀 Starting Trump Tweet Search API...")
+    print("Starting Trump Tweet Search API...")
     
     try:
         # Path to dataset
         data_path = Path(__file__).parent.parent / "data" / "Donald-Tweets!.csv"
         
         if not data_path.exists():
-            print(f"⚠️  Dataset not found at {data_path}")
+            print(f"ERROR: Dataset not found at {data_path}")
             print("Please download the dataset and place it in backend/data/")
             return
         
         # Load dataset
-        print(f"📂 Loading dataset from {data_path}")
+        print(f"Loading dataset from {data_path}")
         df_raw = pd.read_csv(data_path)
         
         # Get first 7000 tweets
         documents = df_raw['Tweet_Text'].dropna().tolist()[:7000]
-        print(f"✓ Loaded {len(documents)} tweets")
+        print(f"Loaded {len(documents)} tweets")
         
         # Preprocess documents
-        print("🔄 Preprocessing documents...")
+        print("Preprocessing documents...")
         cleaned_docs = preprocess_batch(documents)
-        print(f"✓ Preprocessing complete")
+        print(f"Preprocessing complete")
         
         # Initialize and fit search engine
-        print("🔍 Initializing search engine...")
+        print("Initializing search engine...")
         search_engine = TweetSearchEngine(
             max_features=5000,
             min_df=2,
             max_df=0.8
         )
         search_engine.fit(documents, cleaned_docs)
-        print("✓ Search engine ready!")
+        print("Search engine ready")
         
     except Exception as e:
-        print(f"❌ Error during startup: {str(e)}")
+        print(f"ERROR: Failed during startup: {str(e)}")
         raise
 
 
